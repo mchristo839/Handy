@@ -104,10 +104,29 @@ pub fn words_from_rows(custom_words: &[String], rows: &[DictRow]) -> Vec<String>
 
 /// Whole-word, case-insensitive dictionary replacements, longest word first.
 /// Same rule as Android's `Cleanup.applyDictionary`, so both devices produce the same text.
+/// Longest spoken trigger and expansion accepted, as in Wispr Flow. Rows pulled from the server
+/// are untrusted, so longer ones are ignored instead of being pasted into the focused window.
+pub const MAX_WORD: usize = 60;
+pub const MAX_REPLACEMENT: usize = 4000;
+
+/// Drops control characters other than newline and tab, so a replacement cannot send key codes.
+pub fn clean_replacement(r: &str) -> String {
+    r.chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .collect()
+}
+
 pub fn apply_replacements(text: &str, rows: &[DictRow]) -> String {
     let mut active: Vec<&DictRow> = rows
         .iter()
-        .filter(|r| !r.deleted && !r.word.trim().is_empty())
+        .filter(|r| {
+            !r.deleted && !r.word.trim().is_empty() && r.word.trim().chars().count() <= MAX_WORD
+        })
+        .filter(|r| {
+            r.replacement
+                .as_ref()
+                .map_or(true, |x| x.chars().count() <= MAX_REPLACEMENT)
+        })
         .collect();
     active.sort_by_key(|r| std::cmp::Reverse(r.word.trim().chars().count()));
     let mut t = text.to_string();
@@ -118,6 +137,7 @@ pub fn apply_replacements(text: &str, rows: &[DictRow]) -> String {
             .as_deref()
             .filter(|s| !s.trim().is_empty())
             .unwrap_or(word);
+        let target = clean_replacement(target);
         let Ok(re) = regex::Regex::new(&format!("(?i){}", regex::escape(word))) else {
             continue;
         };
@@ -134,7 +154,7 @@ pub fn apply_replacements(text: &str, rows: &[DictRow]) -> String {
                     .is_some_and(char::is_alphanumeric);
             if !inside_word {
                 out.push_str(&t[last..m.start()]);
-                out.push_str(target);
+                out.push_str(&target);
                 last = m.end();
             }
         }
@@ -262,5 +282,18 @@ mod tests {
         assert_eq!(retention_cutoff(None, 100), None);
         assert_eq!(retention_cutoff(Some(0), 100), None);
         assert_eq!(retention_cutoff(Some(1), 86_400_100), Some(100));
+    }
+
+    #[test]
+    fn untrusted_replacements_are_bounded_and_cleaned() {
+        let mut esc = row("deploy", 1, false);
+        esc.replacement = Some("ok\u{1b}[31m\r\nline two\tend".into());
+        let mut huge = row("hello", 1, false);
+        huge.replacement = Some("x".repeat(MAX_REPLACEMENT + 1));
+        let long = row(&"w".repeat(MAX_WORD + 1), 1, false);
+        assert_eq!(
+            apply_replacements("deploy hello", &[esc, huge, long]),
+            "ok[31m\nline two\tend hello"
+        );
     }
 }
