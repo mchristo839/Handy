@@ -128,40 +128,51 @@ pub fn apply_replacements(text: &str, rows: &[DictRow]) -> String {
                 .map_or(true, |x| x.chars().count() <= MAX_REPLACEMENT)
         })
         .collect();
-    active.sort_by_key(|r| std::cmp::Reverse(r.word.trim().chars().count()));
-    let mut t = text.to_string();
-    for r in active {
-        let word = r.word.trim();
-        let target = r
-            .replacement
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or(word);
-        let target = clean_replacement(target);
-        let Ok(re) = regex::Regex::new(&format!("(?i){}", regex::escape(word))) else {
-            continue;
-        };
-        let mut out = String::with_capacity(t.len());
-        let mut last = 0;
-        for m in re.find_iter(&t) {
-            let inside_word = t[..m.start()]
-                .chars()
-                .next_back()
-                .is_some_and(char::is_alphanumeric)
-                || t[m.end()..]
-                    .chars()
-                    .next()
-                    .is_some_and(char::is_alphanumeric);
-            if !inside_word {
-                out.push_str(&t[last..m.start()]);
-                out.push_str(&target);
-                last = m.end();
-            }
-        }
-        out.push_str(&t[last..]);
-        t = out;
+    if active.is_empty() {
+        return text.to_string();
     }
-    t
+    // Longest first so the longest phrase wins at a position.
+    active.sort_by_key(|r| std::cmp::Reverse(r.word.trim().chars().count()));
+    let targets: std::collections::HashMap<String, String> = active
+        .iter()
+        .map(|r| {
+            let word = r.word.trim();
+            let target = r
+                .replacement
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or(word);
+            (word.to_lowercase(), clean_replacement(target))
+        })
+        .collect();
+    let pattern = active
+        .iter()
+        .map(|r| regex::escape(r.word.trim()))
+        .collect::<Vec<_>>()
+        .join("|");
+    let Ok(re) = regex::Regex::new(&format!("(?i)(?:{pattern})")) else {
+        return text.to_string();
+    };
+    // One pass over the original text: inserted text is never expanded again.
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    for m in re.find_iter(text) {
+        let inside_word = text[..m.start()]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric)
+            || text[m.end()..]
+                .chars()
+                .next()
+                .is_some_and(char::is_alphanumeric);
+        if let (false, Some(target)) = (inside_word, targets.get(&m.as_str().to_lowercase())) {
+            out.push_str(&text[last..m.start()]);
+            out.push_str(target);
+            last = m.end();
+        }
+    }
+    out.push_str(&text[last..]);
+    out
 }
 
 /// Cutoff for the synced "history_days" setting. None keeps everything.
@@ -294,6 +305,18 @@ mod tests {
         assert_eq!(
             apply_replacements("deploy hello", &[esc, huge, long]),
             "ok[31m\nline two\tend hello"
+        );
+    }
+
+    #[test]
+    fn replacements_do_not_cascade() {
+        let mut a = row("alpha", 1, false);
+        a.replacement = Some("beta beta".into());
+        let mut b = row("beta", 1, false);
+        b.replacement = Some("gamma".into());
+        assert_eq!(
+            apply_replacements("alpha and beta", &[a, b]),
+            "beta beta and gamma"
         );
     }
 }
