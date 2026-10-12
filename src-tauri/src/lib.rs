@@ -9,6 +9,7 @@ mod chinese_script;
 pub mod cli;
 mod clipboard;
 mod commands;
+mod flowlite_sync;
 pub mod engine_supervisor;
 mod helpers;
 mod input;
@@ -215,6 +216,13 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(model_manager.clone());
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
+    // FlowLite: sync history and dictionary with the FlowLite server.
+    match flowlite_sync::FlowLiteSync::init(app_handle) {
+        Ok(sync) => {
+            app_handle.manage(sync);
+        }
+        Err(e) => log::error!("FlowLite sync disabled: {e}"),
+    }
     app_handle.manage(tray::TrayState::new());
 
     // Note: Shortcuts are NOT initialized here.
@@ -768,6 +776,11 @@ pub fn run(cli_args: CliArgs) {
             commands::history::update_history_limit,
             commands::history::update_recording_retention_period,
             helpers::clamshell::is_laptop,
+            flowlite_sync::flowlite_status,
+            flowlite_sync::flowlite_login,
+            flowlite_sync::flowlite_logout,
+            flowlite_sync::flowlite_sync_now,
+            flowlite_sync::flowlite_transcripts,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,
@@ -945,7 +958,7 @@ pub fn run(cli_args: CliArgs) {
             // for portable mode (redirects WebView2 cache to portable Data dir)
             let mut win_builder =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/".into()))
-                    .title("Handy")
+                    .title("FlowLite")
                     .inner_size(680.0, 570.0)
                     .min_inner_size(680.0, 570.0)
                     .resizable(true)
