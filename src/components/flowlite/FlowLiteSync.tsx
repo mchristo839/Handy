@@ -18,6 +18,7 @@ interface SyncStatus {
   email: string;
   signed_in: boolean;
   message: string;
+  update_ready: boolean;
 }
 
 interface SyncedTranscript {
@@ -154,6 +155,32 @@ export const FlowLiteSync: React.FC = () => {
             </>
           )}
           <p className="text-xs text-mid-gray">{status?.message}</p>
+          {status?.update_ready && (
+            <div className="flex items-center gap-2">
+              <p className="text-sm flex-1">
+                {t(
+                  "flowlite.update.ready",
+                  "A new version of FlowLite is ready.",
+                )}
+              </p>
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await invoke("flowlite_install_update");
+                  } catch (e) {
+                    toast.error(String(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {t("flowlite.update.install", "Install update")}
+              </Button>
+            </div>
+          )}
         </div>
       </SettingsGroup>
 

@@ -6,6 +6,7 @@
 //! `history.db`, created outside Handy's migration list so upstream migrations never collide.
 
 pub mod rules;
+mod update;
 
 use anyhow::{anyhow, Result};
 use log::{info, warn};
@@ -33,6 +34,7 @@ pub struct SyncStatus {
     pub email: String,
     pub signed_in: bool,
     pub message: String,
+    pub update_ready: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
@@ -68,6 +70,9 @@ pub struct FlowLiteSync {
     http: reqwest::Client,
     /// Final text, target app and timing of the last dictation, waiting for its history entry.
     pending: Mutex<Option<Pending>>,
+    /// Verified .deb waiting for the user to install it.
+    update: Mutex<Option<PathBuf>>,
+    last_update_check: Mutex<Option<std::time::Instant>>,
 }
 
 struct Pending {
@@ -96,6 +101,8 @@ impl FlowLiteSync {
                 .timeout(Duration::from_secs(20))
                 .build()?,
             pending: Mutex::new(None),
+            update: Mutex::new(None),
+            last_update_check: Mutex::new(None),
         });
         s.create_tables()?;
         let mut auth: Auth = std::fs::read(&s.auth_path)
@@ -257,6 +264,7 @@ impl FlowLiteSync {
             email: a.email.clone(),
             signed_in: a.token.is_some(),
             message: self.message.lock().unwrap().clone(),
+            update_ready: self.update_ready(),
         }
     }
 
@@ -285,7 +293,13 @@ impl FlowLiteSync {
         }
         .await;
         match &result {
-            Ok(()) => self.set_message(format!("Synced {}", chrono::Local::now().format("%H:%M"))),
+            Ok(()) => {
+                self.set_message(format!("Synced {}", chrono::Local::now().format("%H:%M")));
+                let token = self.auth.lock().unwrap().token.clone();
+                if let Some(token) = token {
+                    self.check_update(&base, &token).await;
+                }
+            }
             Err(e) if e.to_string().contains("Sign in again") => {
                 self.auth.lock().unwrap().token = None;
                 self.save_auth();
@@ -623,6 +637,10 @@ impl FlowLiteSync {
 
     pub async fn login(&self, server_url: String, email: String, password: String) -> Result<()> {
         let base = server_url.trim().trim_end_matches('/').to_string();
+        let local = ["http://localhost", "http://127.0.0.1"].iter().any(|p| base.starts_with(p));
+        if !base.starts_with("https://") && !local {
+            return Err(anyhow!("Server URL must start with https://"));
+        }
         let r = self
             .http
             .post(format!("{base}/api/collections/users/auth-with-password"))
@@ -779,4 +797,10 @@ pub fn flowlite_transcripts(
     query: String,
 ) -> Result<Vec<SyncedTranscript>, String> {
     sync.list(&query).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn flowlite_install_update(sync: State<'_>) -> Result<(), String> {
+    sync.install_update().map_err(|e| e.to_string())
 }

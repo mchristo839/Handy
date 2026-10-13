@@ -781,6 +781,7 @@ pub fn run(cli_args: CliArgs) {
             flowlite_sync::flowlite_logout,
             flowlite_sync::flowlite_sync_now,
             flowlite_sync::flowlite_transcripts,
+            flowlite_sync::flowlite_install_update,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,

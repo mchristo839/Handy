@@ -69,6 +69,9 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 tar = "0.4.44"
 flate2 = "1.0"
 sha2 = "0.10"
+# FlowLite: verifies signed Linux updates (already in the tree via tauri-plugin-updater)
+minisign-verify = "0.2.4"
+base64 = "0.22"
 uuid = { version = "1", features = ["v4", "v5"] }
 libc = "0.2"
 # Whisper-family models run through transcribe-cpp (GGUF/ggml, native backends);

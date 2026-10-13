@@ -109,10 +109,16 @@ pub fn words_from_rows(custom_words: &[String], rows: &[DictRow]) -> Vec<String>
 pub const MAX_WORD: usize = 60;
 pub const MAX_REPLACEMENT: usize = 4000;
 
-/// Drops control characters other than newline and tab, so a replacement cannot send key codes.
+/// Turns newlines and tabs into spaces and drops other control characters. Linux types the text as
+/// keystrokes, so a synced newline would press Enter in a terminal and could run a command.
+// ponytail: multi-line replacements arrive as one line on Linux; they keep their lines on Android.
 pub fn clean_replacement(r: &str) -> String {
     r.chars()
-        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .filter_map(|c| match c {
+            '\n' | '\t' => Some(' '),
+            c if c.is_control() => None,
+            c => Some(c),
+        })
         .collect()
 }
 
@@ -304,7 +310,7 @@ mod tests {
         let long = row(&"w".repeat(MAX_WORD + 1), 1, false);
         assert_eq!(
             apply_replacements("deploy hello", &[esc, huge, long]),
-            "ok[31m\nline two\tend hello"
+            "ok[31m line two end hello"
         );
     }
 
