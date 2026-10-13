@@ -1,6 +1,7 @@
 //! Self-update from the FlowLite server's linux_releases collection (uploaded by flowlite/linux/publish.sh).
-//! The .deb must carry a minisign signature from the release key, which never leaves the publishing
-//! machine, so a compromised server cannot push its own package. Installed with `pkexec dpkg -i`.
+//! Each release carries a minisign signature, from the release key that never leaves the publishing
+//! machine, over "flowlite-linux:<version>:<sha256>". A compromised server can neither push its own
+//! package nor relabel an old signed one as newer. Installed with `pkexec dpkg -i`.
 
 use anyhow::{anyhow, Result};
 use log::{info, warn};
@@ -75,7 +76,8 @@ impl FlowLiteSync {
         std::fs::create_dir_all(&dir)?;
         let deb = dir.join(format!("flowlite-{version}.deb"));
         let sig = rel["signature"].as_str().unwrap_or_default();
-        if std::fs::read(&deb).is_ok_and(|b| hex(&Sha256::digest(&b)) == sha && verify(&b, sig).is_ok()) {
+        verify(manifest(version, sha).as_bytes(), sig)?;
+        if std::fs::read(&deb).is_ok_and(|b| hex(&Sha256::digest(&b)) == sha) {
             return Ok(Some(deb));
         }
         for old in std::fs::read_dir(&dir)?.flatten() {
@@ -111,7 +113,6 @@ impl FlowLiteSync {
         if hex(&Sha256::digest(&bytes)) != sha {
             return Err(anyhow!("update checksum mismatch"));
         }
-        verify(&bytes, sig)?;
         std::fs::write(&deb, &bytes)?;
         info!("FlowLite: update {version} downloaded");
         Ok(Some(deb))
@@ -144,6 +145,11 @@ impl FlowLiteSync {
         let _ = std::fs::remove_file(&deb);
         self.app.restart()
     }
+}
+
+/// What publish.sh signs. Binding the version stops a replayed old release from passing as new.
+fn manifest(version: u64, sha256: &str) -> String {
+    format!("flowlite-linux:{version}:{sha256}")
 }
 
 fn verify(data: &[u8], signature_b64: &str) -> Result<()> {
