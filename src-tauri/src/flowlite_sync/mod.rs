@@ -709,13 +709,15 @@ pub(crate) fn on_transcribed(
 }
 
 /// Window class of the focused X11 window, e.g. "firefox". None on Wayland or without xdotool.
+/// Process name of the focused window. Older xdotool (Ubuntu 24.04) has no getwindowclassname.
 fn active_window_class() -> Option<String> {
     let out = std::process::Command::new("xdotool")
-        .args(["getactivewindow", "getwindowclassname"])
+        .args(["getactivewindow", "getwindowpid"])
         .output()
         .ok()?;
-    let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (out.status.success() && !name.is_empty()).then_some(name)
+    let pid: u32 = String::from_utf8_lossy(&out.stdout).trim().parse().ok()?;
+    let name = std::fs::read_to_string(format!("/proc/{pid}/comm")).ok()?;
+    Some(name.trim().to_string()).filter(|n| !n.is_empty())
 }
 
 fn display_text(e: &HistoryEntry) -> String {
