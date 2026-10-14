@@ -263,7 +263,25 @@ const RecordingOverlay: React.FC = () => {
   const listeningRow = (showTimer: boolean, showCancel: boolean) => (
     <div className="sbase">
       <div className="sbase-l">
-        <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
+        {/* FlowLite parakeet head, in place of Handy's dot */}
+        <svg
+          className={`sdot ${captureReady ? "ready" : "arming"}`}
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="12" r="9" fill="#ffe45c" />
+          <path
+            d="M6 6.5h5M5 9h4"
+            stroke="#1e1e1e"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
+          <circle cx="14.5" cy="10.5" r="1.6" fill="#1e1e1e" />
+          <path
+            d="M18 10.5c3.5-.5 5.5 2.5 4 6-1.2-1.6-2.8-2-4.6-2.4z"
+            fill="#f4a259"
+          />
+        </svg>
       </div>
       {waveform}
       <div className="sbase-r">
