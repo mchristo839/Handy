@@ -193,9 +193,9 @@ impl FlowLiteSync {
                 };
                 c.execute(
                     "INSERT INTO flowlite_transcripts (id, history_id, text, raw_text, device, app_name, engine, model, language,
-                        duration_ms, transcribe_ms, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, 'linux', ?5, 'handy', ?6, ?7, ?8, ?9, ?10, ?11)",
+                        duration_ms, transcribe_ms, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?12, ?5, 'handy', ?6, ?7, ?8, ?9, ?10, ?11)",
                     params![uuid::Uuid::new_v4().to_string(), entry.id, text, entry.transcription_text, app_name,
-                        s.selected_model, s.selected_language, duration_ms, transcribe_ms, created, now_ms()],
+                        s.selected_model, s.selected_language, duration_ms, transcribe_ms, created, now_ms(), std::env::consts::OS],
                 )?;
             }
             HistoryUpdatePayload::Updated { entry } => {

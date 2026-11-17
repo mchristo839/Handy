@@ -18,6 +18,9 @@
           "/usr/lib/FlowLite": "transcribe-libs"
         }
       }
+    },
+    "windows": {
+      "signCommand": null
     }
   },
   "plugins": {

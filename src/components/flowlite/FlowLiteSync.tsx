@@ -240,7 +240,11 @@ export const FlowLiteSync: React.FC = () => {
                 >
                   {it.device === "android"
                     ? t("flowlite.device.android", "Android")
-                    : t("flowlite.device.linux", "Linux")}
+                    : it.device === "windows"
+                      ? t("flowlite.device.windows", "Windows")
+                      : it.device === "macos"
+                        ? t("flowlite.device.macos", "Mac")
+                        : t("flowlite.device.linux", "Linux")}
                 </Badge>
                 <span className="flex-1">
                   {formatDateTime(
