@@ -1,0 +1,28 @@
+{
+  "productName": "FlowLite",
+  "mainBinaryName": "flowlite",
+  "identifier": "com.utomat.flowlite",
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "shortDescription": "Offline voice dictation with sync",
+    "longDescription": "FlowLite: offline push-to-talk dictation based on Handy (MIT), with transcript and dictionary sync.",
+    "linux": {
+      "deb": {
+        "depends": [
+          "libgtk-layer-shell0",
+          "libopenblas0",
+          "xdotool"
+        ],
+        "files": {
+          "/usr/lib/Handy": null,
+          "/usr/lib/FlowLite": "transcribe-libs"
+        }
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": []
+    }
+  }
+}

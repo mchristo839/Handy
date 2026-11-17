@@ -709,6 +709,11 @@ impl ShortcutAction for TranscribeAction {
                                 set_tray_state(&ah, TrayIconState::Idle);
                                 return;
                             };
+                            let processed = crate::flowlite_sync::on_transcribed(
+                                &ah,
+                                processed,
+                                transcription_time.elapsed(),
+                            );
 
                             if rm.was_cancelled_since(cancel_generation) {
                                 debug!("Transcription operation cancelled before paste");

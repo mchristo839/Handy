@@ -2542,6 +2542,7 @@ name = "handy"
 version = "0.9.8"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "clap",
  "earshot",
@@ -2559,6 +2560,7 @@ dependencies = [
  "isolang",
  "libc",
  "log",
+ "minisign-verify",
  "natural",
  "objc2",
  "objc2-app-kit",
@@ -2601,6 +2603,7 @@ dependencies = [
  "tokio",
  "transcribe-cpp",
  "transcribe-rs",
+ "uuid",
  "webview2-com",
  "whatlang",
  "windows 0.61.3",
@@ -5940,6 +5943,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7727,6 +7736,7 @@ dependencies = [
  "getrandom 0.4.1",
  "js-sys",
  "serde_core",
+ "sha1_smol",
  "wasm-bindgen",
 ]
 
