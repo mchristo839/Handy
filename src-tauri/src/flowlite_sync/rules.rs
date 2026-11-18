@@ -3,9 +3,10 @@
 
 use std::collections::HashSet;
 
-/// Last write wins. A tie keeps the local copy (identical or already queued).
+/// Last write wins. On a tie the server's copy wins: the server keeps the first write it got
+/// with that timestamp (pb_hooks/main.pb.js), so every device ends up with the same value.
 pub fn remote_wins(local_updated_at: Option<i64>, remote_updated_at: i64) -> bool {
-    local_updated_at.map_or(true, |l| remote_updated_at > l)
+    local_updated_at.map_or(true, |l| remote_updated_at >= l)
 }
 
 pub fn dictionary_id(word: &str) -> String {
@@ -212,7 +213,7 @@ mod tests {
         assert!(remote_wins(None, 5));
         assert!(remote_wins(Some(4), 5));
         assert!(!remote_wins(Some(6), 5));
-        assert!(!remote_wins(Some(5), 5), "tie keeps local");
+        assert!(remote_wins(Some(5), 5), "tie takes the server copy");
     }
 
     #[test]

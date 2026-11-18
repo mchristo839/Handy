@@ -282,17 +282,25 @@ impl FlowLiteSync {
             self.refresh_token(&base, &token).await?;
             let token = self.auth.lock().unwrap().token.clone().unwrap_or(token);
             self.record_local_changes()?;
-            self.push(&base, &token, &owner).await?;
+            let mut rejected = self.push(&base, &token, &owner).await?;
             self.pull(&base, &token).await?;
             if self.purge_old()? {
-                self.push(&base, &token, &owner).await?; // old rows pulled from other devices
+                rejected += self.push(&base, &token, &owner).await?; // old rows pulled from other devices
             }
-            self.apply_to_handy()
+            self.apply_to_handy()?;
+            Ok::<usize, anyhow::Error>(rejected)
         }
         .await;
         match &result {
-            Ok(()) => {
+            Ok(0) => {
                 self.set_message(format!("Synced {}", chrono::Local::now().format("%H:%M")));
+            }
+            Ok(n) => {
+                // Kept dirty, so they retry. An outdated server is the usual cause.
+                self.set_message(format!(
+                    "Synced {}, but the server refused {n} change(s). Update the server: git pull && ./setup.sh",
+                    chrono::Local::now().format("%H:%M")
+                ));
             }
             Err(e) if e.to_string().contains("Sign in again") => {
                 self.auth.lock().unwrap().token = None;
@@ -302,7 +310,7 @@ impl FlowLiteSync {
             }
             Err(_) => {}
         }
-        result
+        result.map(|_| ())
     }
 
     async fn refresh_token(&self, base: &str, token: &str) -> Result<()> {
@@ -448,7 +456,8 @@ impl FlowLiteSync {
         Ok(())
     }
 
-    async fn push(&self, base: &str, token: &str, owner: &str) -> Result<()> {
+    /// Pushes dirty rows. Returns how many the server refused (HTTP 400). Those stay dirty.
+    async fn push(&self, base: &str, token: &str, owner: &str) -> Result<usize> {
         let dirty: Vec<(String, &str, Value, i64)> = {
             let c = self.conn()?;
             let mut out = Vec::new();
@@ -492,6 +501,7 @@ impl FlowLiteSync {
             out
         };
 
+        let mut rejected = 0;
         for (id, col, mut body, updated_at) in dirty {
             body["owner"] = json!(owner);
             let remote_id = match col {
@@ -520,10 +530,15 @@ impl FlowLiteSync {
             check_auth(r.status())?;
             match code {
                 200 | 409 => {}
-                400 => warn!(
-                    "FlowLite: server rejected {col}/{remote_id}: {}",
-                    r.text().await.unwrap_or_default()
-                ),
+                400 => {
+                    // r is the last response, the POST when the PATCH found nothing.
+                    warn!(
+                        "FlowLite: server rejected {col}/{remote_id}: {}",
+                        r.text().await.unwrap_or_default()
+                    );
+                    rejected += 1;
+                    continue;
+                }
                 _ => return Err(anyhow!("push {col} failed: HTTP {code}")),
             }
             // Only clear dirty if the row did not change while we were pushing.
@@ -532,7 +547,7 @@ impl FlowLiteSync {
                 params![id, updated_at],
             )?;
         }
-        Ok(())
+        Ok(rejected)
     }
 
     async fn pull(&self, base: &str, token: &str) -> Result<()> {
