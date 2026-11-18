@@ -19,6 +19,13 @@ pub fn setting_id(key: &str) -> String {
     uuid5(&format!("flowlite:settings:{key}"))
 }
 
+/// Server record id for a dictionary word or setting. Local ids are the same on every account,
+/// so the server copy also carries the owner. Without it one account on a shared server could
+/// create another account's record first, blocking that sync and revealing which words exist.
+pub fn owned_id(local_id: &str, owner: &str) -> String {
+    uuid5(&format!("flowlite:owned:{owner}:{local_id}"))
+}
+
 fn uuid5(name: &str) -> String {
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, name.as_bytes()).to_string()
 }
@@ -215,6 +222,14 @@ mod tests {
             dictionary_id("  Kubernetes "),
             "55ac65ef-9da4-55c6-a4ce-1df859da6111"
         );
+    }
+
+    #[test]
+    fn owned_ids_differ_per_account_and_match_android() {
+        // python3 -c "import uuid;print(uuid.uuid5(uuid.NAMESPACE_URL,'flowlite:owned:abc123:55ac65ef-9da4-55c6-a4ce-1df859da6111'))"
+        let local = dictionary_id("kubernetes");
+        assert_eq!(owned_id(&local, "abc123"), "2ac742dc-3a0c-5191-9fc5-da94b491e9f4");
+        assert_ne!(owned_id(&local, "abc123"), owned_id(&local, "xyz789"));
     }
 
     #[test]

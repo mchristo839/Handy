@@ -22,8 +22,10 @@ const RELEASE_PUBKEY: &str = include_str!("release.pub");
 
 #[cfg(target_os = "windows")]
 const OS: &str = "windows";
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 const OS: &str = "macos";
+#[cfg(all(target_os = "macos", not(target_arch = "aarch64")))]
+const OS: &str = "macos-x64"; // Intel Macs have their own build and update file
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const OS: &str = "linux";
 

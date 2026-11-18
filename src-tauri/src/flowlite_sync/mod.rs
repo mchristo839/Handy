@@ -494,16 +494,20 @@ impl FlowLiteSync {
 
         for (id, col, mut body, updated_at) in dirty {
             body["owner"] = json!(owner);
+            let remote_id = match col {
+                "transcripts" => id.clone(), // random per transcript, nothing to guess
+                _ => rules::owned_id(&id, owner),
+            };
             let url = format!("{base}/api/collections/{col}/records");
             let mut r = self
                 .http
-                .patch(format!("{url}/{id}"))
+                .patch(format!("{url}/{remote_id}"))
                 .header("Authorization", token)
                 .json(&body)
                 .send()
                 .await?;
             if r.status().as_u16() == 404 {
-                body["id"] = json!(id);
+                body["id"] = json!(remote_id);
                 r = self
                     .http
                     .post(&url)
@@ -517,7 +521,7 @@ impl FlowLiteSync {
             match code {
                 200 | 409 => {}
                 400 => warn!(
-                    "FlowLite: server rejected {col}/{id}: {}",
+                    "FlowLite: server rejected {col}/{remote_id}: {}",
                     r.text().await.unwrap_or_default()
                 ),
                 _ => return Err(anyhow!("push {col} failed: HTTP {code}")),
@@ -588,9 +592,19 @@ impl FlowLiteSync {
     }
 
     fn apply_remote(&self, c: &Connection, col: &str, it: &Value) -> Result<()> {
-        let id = it["id"]
-            .as_str()
-            .ok_or_else(|| anyhow!("record without id"))?;
+        // Dictionary and settings rows are keyed locally by word or key. Server ids also carry
+        // the owner (rules::owned_id), and records from older apps do not, so map both back.
+        let derived = match col {
+            "dictionary" => it["word"].as_str().map(rules::dictionary_id),
+            "settings" => it["key"].as_str().map(rules::setting_id),
+            _ => None,
+        };
+        let id = match &derived {
+            Some(d) => d.as_str(),
+            None => it["id"]
+                .as_str()
+                .ok_or_else(|| anyhow!("record without id"))?,
+        };
         let remote_at = it["updated_at"].as_i64().unwrap_or(0);
         let local_at: Option<i64> = c
             .query_row(
